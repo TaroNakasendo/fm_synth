@@ -1,113 +1,355 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
+import React, { useEffect, useRef, useState } from 'react';
+
+const FMSynthesizer = () => {
+  const audioContextRef = useRef(null);
+  const voicesRef = useRef({});
+  const gainNodeRef = useRef(null);
+  const reverbNodeRef = useRef(null);
+  const delayNodeRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState({});
+  const [isAudioContextStarted, setIsAudioContextStarted] = useState(false);
+  
+  const [modulationIndex, setModulationIndex] = useState(100);
+  const [modulationRatio, setModulationRatio] = useState(2);
+  const [waveform, setWaveform] = useState('sine');
+  const [attack, setAttack] = useState(0.1);
+  const [decay, setDecay] = useState(0.2);
+  const [sustain, setSustain] = useState(0.5);
+  const [release, setRelease] = useState(0.5);
+  const [reverbWet, setReverbWet] = useState(0.5);
+  const [delayTime, setDelayTime] = useState(0.3);
+  const [delayFeedback, setDelayFeedback] = useState(0.4);
+
+  const initializeAudioContext = () => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || window.AudioContext)();
+      gainNodeRef.current = audioContextRef.current.createGain();
+      gainNodeRef.current.gain.setValueAtTime(0.5, audioContextRef.current.currentTime);
+      
+      // Create reverb
+      reverbNodeRef.current = createReverb();
+      
+      // Create delay
+      delayNodeRef.current = audioContextRef.current.createDelay(5.0);
+      delayNodeRef.current.delayTime.setValueAtTime(delayTime, audioContextRef.current.currentTime);
+      const feedbackGain = audioContextRef.current.createGain();
+      feedbackGain.gain.setValueAtTime(delayFeedback, audioContextRef.current.currentTime);
+      
+      delayNodeRef.current.connect(feedbackGain);
+      feedbackGain.connect(delayNodeRef.current);
+      
+      gainNodeRef.current.connect(delayNodeRef.current);
+      gainNodeRef.current.connect(reverbNodeRef.current);
+      delayNodeRef.current.connect(audioContextRef.current.destination);
+      reverbNodeRef.current.connect(audioContextRef.current.destination);
+      gainNodeRef.current.connect(audioContextRef.current.destination);
+      
+      updateReverbWet();
+      setIsAudioContextStarted(true);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (audioContextRef.current) {
+      updateReverbWet();
+    }
+  }, [reverbWet]);
+
+  useEffect(() => {
+    if (delayNodeRef.current) {
+      delayNodeRef.current.delayTime.setValueAtTime(delayTime, audioContextRef.current.currentTime);
+    }
+  }, [delayTime]);
+
+  useEffect(() => {
+    if (delayNodeRef.current) {
+      const feedbackGain = audioContextRef.current.createGain();
+      feedbackGain.gain.setValueAtTime(delayFeedback, audioContextRef.current.currentTime);
+      delayNodeRef.current.disconnect();
+      delayNodeRef.current.connect(feedbackGain);
+      feedbackGain.connect(delayNodeRef.current);
+      delayNodeRef.current.connect(audioContextRef.current.destination);
+    }
+  }, [delayFeedback]);
+
+  const createReverb = () => {
+    const convolver = audioContextRef.current.createConvolver();
+    const reverbTime = 2;
+    const sampleRate = audioContextRef.current.sampleRate;
+    const impulseLength = sampleRate * reverbTime;
+    const impulseBuffer = audioContextRef.current.createBuffer(2, impulseLength, sampleRate);
+    
+    for (let channel = 0; channel < 2; channel++) {
+      const impulseData = impulseBuffer.getChannelData(channel);
+      for (let i = 0; i < impulseLength; i++) {
+        impulseData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / impulseLength, reverbTime);
+      }
+    }
+    
+    convolver.buffer = impulseBuffer;
+    return convolver;
+  };
+
+  const updateReverbWet = () => {
+    if (reverbNodeRef.current) {
+      reverbNodeRef.current.wet.value = reverbWet;
+    }
+  };
+
+  const playNote = (frequency) => {
+    if (!isAudioContextStarted) {
+      initializeAudioContext();
+    }
+
+    if (voicesRef.current[frequency]) {
+      return; // Note is already playing
+    }
+
+    const time = audioContextRef.current.currentTime;
+
+    const oscillator = audioContextRef.current.createOscillator();
+    oscillator.type = waveform;
+    oscillator.frequency.setValueAtTime(frequency, time);
+
+    const modulator = audioContextRef.current.createOscillator();
+    modulator.type = waveform;
+    modulator.frequency.setValueAtTime(frequency * modulationRatio, time);
+
+    const modulationGain = audioContextRef.current.createGain();
+    modulationGain.gain.setValueAtTime(modulationIndex, time);
+
+    const envelope = audioContextRef.current.createGain();
+    envelope.gain.setValueAtTime(0, time);
+
+    modulator.connect(modulationGain);
+    modulationGain.connect(oscillator.frequency);
+    oscillator.connect(envelope);
+    envelope.connect(gainNodeRef.current);
+    
+    modulator.start(time);
+    oscillator.start(time);
+
+    // ADSR Envelope
+    envelope.gain.setValueAtTime(0, time);
+    envelope.gain.linearRampToValueAtTime(1, time + attack);
+    envelope.gain.linearRampToValueAtTime(sustain, time + attack + decay);
+
+    voicesRef.current[frequency] = { oscillator, modulator, envelope };
+    setIsPlaying((prev) => ({ ...prev, [frequency]: true }));
+  };
+
+  const stopNote = (frequency) => {
+    if (!voicesRef.current[frequency]) {
+      return; // Note is not playing
+    }
+
+    const time = audioContextRef.current.currentTime;
+    const { oscillator, modulator, envelope } = voicesRef.current[frequency];
+
+    envelope.gain.cancelScheduledValues(time);
+    envelope.gain.setValueAtTime(envelope.gain.value, time);
+    envelope.gain.linearRampToValueAtTime(0, time + release);
+
+    oscillator.stop(time + release);
+    modulator.stop(time + release);
+
+    setTimeout(() => {
+      delete voicesRef.current[frequency];
+    }, release * 1000);
+
+    setIsPlaying((prev) => ({ ...prev, [frequency]: false }));
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.repeat) return;
+    const key = event.key.toLowerCase();
+    const frequencyMap = {
+      'z': 261.63, 'x': 293.66, 'c': 329.63, 'v': 349.23,
+      'b': 392.00, 'n': 440.00, 'm': 493.88, ',': 523.25
+    };
+    if (frequencyMap[key]) {
+      playNote(frequencyMap[key]);
+    }
+  };
+
+  const handleKeyUp = (event) => {
+    const key = event.key.toLowerCase();
+    const frequencyMap = {
+      'z': 261.63, 'x': 293.66, 'c': 329.63, 'v': 349.23,
+      'b': 392.00, 'n': 440.00, 'm': 493.88, ',': 523.25
+    };
+    if (frequencyMap[key]) {
+      stopNote(frequencyMap[key]);
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [attack, decay, sustain, release, waveform, modulationIndex, modulationRatio]);
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:size-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div className="p-4 bg-gray-100 rounded-lg">
+      <h2 className="text-2xl font-bold mb-4">Advanced FM Synthesizer with Delay</h2>
+      <div className="grid grid-cols-4 gap-2 mb-4">
+        {['Z', 'X', 'C', 'V', 'B', 'N', 'M', ','].map((key, index) => (
+          <button
+            key={key}
+            className={`p-4 text-lg font-bold rounded ${
+              isPlaying[[261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25][index]]
+                ? 'bg-blue-500 text-white'
+                : 'bg-white text-black'
+            }`}
+            onMouseDown={() => playNote([261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25][index])}
+            onMouseUp={() => stopNote([261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25][index])}
+            onMouseLeave={() => stopNote([261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25][index])}
           >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+            {key}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block mb-2">Modulation Index: {modulationIndex}</label>
+          <input
+            type="range"
+            min="0"
+            max="1000"
+            value={modulationIndex}
+            onChange={(e) => setModulationIndex(Number(e.target.value))}
+            className="w-full"
+          />
+        </div>
+        <div>
+          <label className="block mb-2">Modulation Ratio: {modulationRatio}</label>
+          <input
+            type="range"
+            min="0.5"
+            max="8"
+            step="0.5"
+            value={modulationRatio}
+            onChange={(e) => setModulationRatio(Number(e.target.value))}
+            className="w-full"
+          />
+        </div>
+        <div>
+          <label className="block mb-2">Waveform:</label>
+          <select
+            value={waveform}
+            onChange={(e) => setWaveform(e.target.value)}
+            className="w-full p-2 rounded"
+          >
+            <option value="sine">Sine</option>
+            <option value="square">Square</option>
+            <option value="sawtooth">Sawtooth</option>
+            <option value="triangle">Triangle</option>
+          </select>
+        </div>
+        <div>
+          <label className="block mb-2">Reverb: {reverbWet}</label>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={reverbWet}
+            onChange={(e) => setReverbWet(Number(e.target.value))}
+            className="w-full"
+          />
+        </div>
+        <div>
+          <label className="block mb-2">Delay Time: {delayTime}s</label>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={delayTime}
+            onChange={(e) => setDelayTime(Number(e.target.value))}
+            className="w-full"
+          />
+        </div>
+        <div>
+          <label className="block mb-2">Delay Feedback: {delayFeedback}</label>
+          <input
+            type="range"
+            min="0"
+            max="0.9"
+            step="0.01"
+            value={delayFeedback}
+            onChange={(e) => setDelayFeedback(Number(e.target.value))}
+            className="w-full"
+          />
         </div>
       </div>
-
-      <div className="relative z-[-1] flex place-items-center before:absolute before:h-[300px] before:w-full before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 sm:before:w-[480px] sm:after:w-[240px] before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
+      <h3 className="text-xl font-bold mt-4 mb-2">ADSR Envelope</h3>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block mb-2">Attack: {attack}s</label>
+          <input
+            type="range"
+            min="0"
+            max="2"
+            step="0.01"
+            value={attack}
+            onChange={(e) => setAttack(Number(e.target.value))}
+            className="w-full"
+          />
+        </div>
+        <div>
+          <label className="block mb-2">Decay: {decay}s</label>
+          <input
+            type="range"
+            min="0"
+            max="2"
+            step="0.01"
+            value={decay}
+            onChange={(e) => setDecay(Number(e.target.value))}
+            className="w-full"
+          />
+        </div>
+        <div>
+          <label className="block mb-2">Sustain: {sustain}</label>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={sustain}
+            onChange={(e) => setSustain(Number(e.target.value))}
+            className="w-full"
+          />
+        </div>
+        <div>
+          <label className="block mb-2">Release: {release}s</label>
+          <input
+            type="range"
+            min="0"
+            max="2"
+            step="0.01"
+            value={release}
+            onChange={(e) => setRelease(Number(e.target.value))}
+            className="w-full"
+          />
+        </div>
       </div>
-
-      <div className="mb-32 grid text-center lg:mb-0 lg:w-full lg:max-w-5xl lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-balance text-sm opacity-50">
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
+      <p className="mt-4 text-sm">Press the keys or click the buttons to play notes</p>
+    </div>
   );
-}
+};
+
+export default FMSynthesizer;
