@@ -2,6 +2,13 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 
+const frequencyMap = {
+  'z': 261.63, 's': 277.18, 'x': 293.66, 'd': 311.13, 'c': 329.63,
+  'v': 349.23, 'g': 369.99, 'b': 392.00, 'h': 415.30, 'n': 440.00,
+  'j': 466.16, 'm': 493.88, ',': 523.25, 'l': 554.37, '.': 587.33,
+  ';': 622.25, '/': 659.25, ':': 698.46, '\\': 739.99
+};
+
 const FMSynthesizer = () => {
   const audioContextRef = useRef(null);
   const voicesRef = useRef({});
@@ -24,13 +31,6 @@ const FMSynthesizer = () => {
   const [delayTime, setDelayTime] = useState(0.48);
   const [delayFeedback, setDelayFeedback] = useState(0.4);
   const [octaveShift, setOctaveShift] = useState(0);
-
-  const frequencyMap = {
-    'z': 261.63, 's': 277.18, 'x': 293.66, 'd': 311.13, 'c': 329.63,
-    'v': 349.23, 'g': 369.99, 'b': 392.00, 'h': 415.30, 'n': 440.00,
-    'j': 466.16, 'm': 493.88, ',': 523.25, 'l': 554.37, '.': 587.33,
-    ';': 622.25, '/': 659.25, ':': 698.46, '\\': 739.99
-  };
 
   const initializeAudioContext = () => {
     if (!audioContextRef.current) {
@@ -63,32 +63,6 @@ const FMSynthesizer = () => {
       setIsAudioContextStarted(true);
     }
   };
-
-  useEffect(() => {
-    return () => {
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (audioContextRef.current) {
-      updateReverbWet();
-    }
-  }, [reverbWet]);
-
-  useEffect(() => {
-    if (delayNodeRef.current) {
-      delayNodeRef.current.delayTime.setValueAtTime(delayTime, audioContextRef.current.currentTime);
-    }
-  }, [delayTime]);
-
-  useEffect(() => {
-    if (audioContextRef.current) {
-      delayFeedbackGainRef.current.gain.setValueAtTime(delayFeedback, audioContextRef.current.currentTime);
-    }
-  }, [delayFeedback]);
 
   const createReverb = () => {
     const convolver = audioContextRef.current.createConvolver();
@@ -213,180 +187,39 @@ const FMSynthesizer = () => {
   return (
     <div className="p-4 bg-gray-100 rounded-lg">
       <h2 className="text-2xl font-bold mb-4">16 Key FM Synthesizer with Delay</h2>
-      <div className="keyboard mb-4">
-        {Object.keys(frequencyMap).map((key, index) => (
-          <div
-            key={key}
-            className={`key ${['z', 'x', 'c', 'v', 'b', 'n', 'm', ',', ':', '\\'].includes(key) ? 'white-key' : 'black-key'} ${isPlaying[frequencyMap[key] * Math.pow(2, octaveShift)] ? 'playing' : ''}`}
-            onMouseDown={() => playNote(frequencyMap[key] * Math.pow(2, octaveShift))}
-            onMouseUp={() => stopNote(frequencyMap[key] * Math.pow(2, octaveShift))}
-            onMouseLeave={() => stopNote(frequencyMap[key] * Math.pow(2, octaveShift))}
-          >
-            {key.toUpperCase()}
-          </div>
-        ))}
-      </div>
-      <div className="mb-4">
-        <button onClick={decreaseOctave} className="p-2 bg-blue-500 text-white rounded mr-2">- Octave</button>
-        <button onClick={increaseOctave} className="p-2 bg-blue-500 text-white rounded">+ Octave</button>
-      </div>
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        <div>
-          <label className="block mb-2">Modulation Index: {modulationIndex}</label>
-          <input
-            type="range"
-            min="0"
-            max="1000"
-            value={modulationIndex}
-            onChange={(e) => setModulationIndex(Number(e.target.value))}
-            className="w-full"
-          />
-        </div>
-        <div>
-          <label className="block mb-2">Modulation Ratio: {modulationRatio}</label>
-          <input
-            type="range"
-            min="0.5"
-            max="8"
-            step="0.1"
-            value={modulationRatio}
-            onChange={(e) => setModulationRatio(Number(e.target.value))}
-            className="w-full"
-          />
-        </div>
-        <div>
-          <label className="block mb-2">Waveform:</label>
-          <select
-            value={waveform}
-            onChange={(e) => setWaveform(e.target.value)}
-            className="w-full p-2 rounded"
-          >
-            <option value="sine">Sine</option>
-            <option value="square">Square</option>
-            <option value="sawtooth">Sawtooth</option>
-            <option value="triangle">Triangle</option>
-          </select>
-        </div>
-        <div>
-          <label className="block mb-2">Reverb: {reverbWet}</label>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={reverbWet}
-            onChange={(e) => setReverbWet(Number(e.target.value))}
-            className="w-full"
-          />
-        </div>
-        <div>
-          <label className="block mb-2">Delay Time: {delayTime}s</label>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={delayTime}
-            onChange={(e) => setDelayTime(Number(e.target.value))}
-            className="w-full"
-          />
-        </div>
-        <div>
-          <label className="block mb-2">Delay Feedback: {delayFeedback}</label>
-          <input
-            type="range"
-            min="0"
-            max="0.9"
-            step="0.01"
-            value={delayFeedback}
-            onChange={(e) => setDelayFeedback(Number(e.target.value))}
-            className="w-full"
-          />
-        </div>
-      </div>
-      <h3 className="text-xl font-bold mt-4 mb-2">ADSR Envelope</h3>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block mb-2">Attack: {attack}s</label>
-          <input
-            type="range"
-            min="0"
-            max="2"
-            step="0.01"
-            value={attack}
-            onChange={(e) => setAttack(Number(e.target.value))}
-            className="w-full"
-          />
-        </div>
-        <div>
-          <label className="block mb-2">Decay: {decay}s</label>
-          <input
-            type="range"
-            min="0"
-            max="2"
-            step="0.01"
-            value={decay}
-            onChange={(e) => setDecay(Number(e.target.value))}
-            className="w-full"
-          />
-        </div>
-        <div>
-          <label className="block mb-2">Sustain: {sustain}</label>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={sustain}
-            onChange={(e) => setSustain(Number(e.target.value))}
-            className="w-full"
-          />
-        </div>
-        <div>
-          <label className="block mb-2">Release: {release}s</label>
-          <input
-            type="range"
-            min="0"
-            max="2"
-            step="0.01"
-            value={release}
-            onChange={(e) => setRelease(Number(e.target.value))}
-            className="w-full"
-          />
-        </div>
-      </div>
+      <Keyboard
+        frequencyMap={frequencyMap}
+        isPlaying={isPlaying}
+        octaveShift={octaveShift}
+        playNote={playNote}
+        stopNote={stopNote}
+      />
+      <Controls
+        modulationIndex={modulationIndex}
+        setModulationIndex={setModulationIndex}
+        modulationRatio={modulationRatio}
+        setModulationRatio={setModulationRatio}
+        waveform={waveform}
+        setWaveform={setWaveform}
+        reverbWet={reverbWet}
+        setReverbWet={setReverbWet}
+        delayTime={delayTime}
+        setDelayTime={setDelayTime}
+        delayFeedback={delayFeedback}
+        setDelayFeedback={setDelayFeedback}
+        attack={attack}
+        setAttack={setAttack}
+        decay={decay}
+        setDecay={setDecay}
+        sustain={sustain}
+        setSustain={setSustain}
+        release={release}
+        setRelease={setRelease}
+        increaseOctave={increaseOctave}
+        decreaseOctave={decreaseOctave}
+      />
       <p className="mt-4 text-sm">Press the keys or click the buttons to play notes</p>
       <style jsx>{`
-        .keyboard {
-          display: flex;
-          flex-wrap: wrap;
-        }
-        .key {
-          width: 40px;
-          height: 150px;
-          margin: 2px;
-          display: flex;
-          justify-content: center;
-          align-items: flex-end;
-          cursor: pointer;
-          user-select: none;
-          font-size: 14px;
-          font-weight: bold;
-        }
-        .white-key {
-          background: white;
-          border: 1px solid #000;
-        }
-        .black-key {
-          background: black;
-          border: 1px solid #000;
-          color: white;
-          width: 30px;
-          height: 100px;
-          margin-left: -15px;
-          margin-right: -15px;
-          z-index: 1;
-        }
         .playing {
           background: yellow;
         }
@@ -394,5 +227,189 @@ const FMSynthesizer = () => {
     </div>
   );
 };
+
+const Keyboard = ({ frequencyMap, isPlaying, octaveShift, playNote, stopNote }) => (
+  <div className="keyboard mb-4">
+    {Object.keys(frequencyMap).map((key) => (
+      <div
+        key={key}
+        className={`key ${['z', 'x', 'c', 'v', 'b', 'n', 'm', ',', ':', '\\'].includes(key) ? 'white-key' : 'black-key'} ${isPlaying[frequencyMap[key] * Math.pow(2, octaveShift)] ? 'playing' : ''}`}
+        onMouseDown={() => playNote(frequencyMap[key] * Math.pow(2, octaveShift))}
+        onMouseUp={() => stopNote(frequencyMap[key] * Math.pow(2, octaveShift))}
+        onMouseLeave={() => stopNote(frequencyMap[key] * Math.pow(2, octaveShift))}
+      >
+        {key.toUpperCase()}
+      </div>
+    ))}
+    <style jsx>{`
+      .keyboard {
+        display: flex;
+        flex-wrap: wrap;
+      }
+      .key {
+        width: 40px;
+        height: 150px;
+        margin: 2px;
+        display: flex;
+        justify-content: center;
+        align-items: flex-end;
+        cursor: pointer;
+        user-select: none;
+        font-size: 14px;
+        font-weight: bold;
+      }
+      .white-key {
+        background: white;
+        border: 1px solid #000;
+      }
+      .black-key {
+        background: black;
+        border: 1px solid #000;
+        color: white;
+        width: 30px;
+        height: 100px;
+        margin-left: -15px;
+        margin-right: -15px;
+        z-index: 1;
+      }
+      .playing {
+        background: yellow;
+      }
+    `}</style>
+  </div>
+);
+
+const Controls = ({
+  modulationIndex, setModulationIndex,
+  modulationRatio, setModulationRatio,
+  waveform, setWaveform,
+  reverbWet, setReverbWet,
+  delayTime, setDelayTime,
+  delayFeedback, setDelayFeedback,
+  attack, setAttack,
+  decay, setDecay,
+  sustain, setSustain,
+  release, setRelease,
+  increaseOctave, decreaseOctave
+}) => (
+  <>
+    <div className="mb-4">
+      <button onClick={decreaseOctave} className="p-2 bg-blue-500 text-white rounded mr-2">- Octave</button>
+      <button onClick={increaseOctave} className="p-2 bg-blue-500 text-white rounded">+ Octave</button>
+    </div>
+    <div className="grid grid-cols-2 gap-4 mb-4">
+      <Slider
+        label="Modulation Index"
+        value={modulationIndex}
+        min="0"
+        max="1000"
+        onChange={setModulationIndex}
+      />
+      <Slider
+        label="Modulation Ratio"
+        value={modulationRatio}
+        min="0.5"
+        max="8"
+        step="0.1"
+        onChange={setModulationRatio}
+      />
+      <Select
+        label="Waveform"
+        value={waveform}
+        options={['sine', 'square', 'sawtooth', 'triangle']}
+        onChange={setWaveform}
+      />
+      <Slider
+        label="Reverb"
+        value={reverbWet}
+        min="0"
+        max="1"
+        step="0.01"
+        onChange={setReverbWet}
+      />
+      <Slider
+        label="Delay Time"
+        value={delayTime}
+        min="0"
+        max="1"
+        step="0.01"
+        onChange={setDelayTime}
+      />
+      <Slider
+        label="Delay Feedback"
+        value={delayFeedback}
+        min="0"
+        max="0.9"
+        step="0.01"
+        onChange={setDelayFeedback}
+      />
+    </div>
+    <h3 className="text-xl font-bold mt-4 mb-2">ADSR Envelope</h3>
+    <div className="grid grid-cols-2 gap-4">
+      <Slider
+        label="Attack"
+        value={attack}
+        min="0"
+        max="2"
+        step="0.01"
+        onChange={setAttack}
+      />
+      <Slider
+        label="Decay"
+        value={decay}
+        min="0"
+        max="2"
+        step="0.01"
+        onChange={setDecay}
+      />
+      <Slider
+        label="Sustain"
+        value={sustain}
+        min="0"
+        max="1"
+        step="0.01"
+        onChange={setSustain}
+      />
+      <Slider
+        label="Release"
+        value={release}
+        min="0"
+        max="2"
+        step="0.01"
+        onChange={setRelease}
+      />
+    </div>
+  </>
+);
+
+const Slider = ({ label, value, min, max, step = "1", onChange }) => (
+  <div>
+    <label className="block mb-2">{label}: {value}</label>
+    <input
+      type="range"
+      min={min}
+      max={max}
+      step={step}
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      className="w-full"
+    />
+  </div>
+);
+
+const Select = ({ label, value, options, onChange }) => (
+  <div>
+    <label className="block mb-2">{label}:</label>
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full p-2 rounded"
+    >
+      {options.map(option => (
+        <option key={option} value={option}>{option.charAt(0).toUpperCase() + option.slice(1)}</option>
+      ))}
+    </select>
+  </div>
+);
 
 export default FMSynthesizer;
