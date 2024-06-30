@@ -7,19 +7,21 @@ const FMSynthesizer = () => {
   const voicesRef = useRef({});
   const gainNodeRef = useRef(null);
   const reverbNodeRef = useRef(null);
+  const reverbWetGainRef = useRef(null);
   const delayNodeRef = useRef(null);
+  const delayFeedbackGainRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState({});
   const [isAudioContextStarted, setIsAudioContextStarted] = useState(false);
   
-  const [modulationIndex, setModulationIndex] = useState(100);
-  const [modulationRatio, setModulationRatio] = useState(2);
-  const [waveform, setWaveform] = useState('sine');
-  const [attack, setAttack] = useState(0.1);
-  const [decay, setDecay] = useState(0.2);
+  const [modulationIndex, setModulationIndex] = useState(800);
+  const [modulationRatio, setModulationRatio] = useState(4);
+  const [waveform, setWaveform] = useState('square');
+  const [attack, setAttack] = useState(0.0);
+  const [decay, setDecay] = useState(0.47);
   const [sustain, setSustain] = useState(0.5);
-  const [release, setRelease] = useState(0.5);
-  const [reverbWet, setReverbWet] = useState(0.5);
-  const [delayTime, setDelayTime] = useState(0.3);
+  const [release, setRelease] = useState(0.2);
+  const [reverbWet, setReverbWet] = useState(0.8);
+  const [delayTime, setDelayTime] = useState(0.48);
   const [delayFeedback, setDelayFeedback] = useState(0.4);
 
   const initializeAudioContext = () => {
@@ -30,20 +32,23 @@ const FMSynthesizer = () => {
       
       // Create reverb
       reverbNodeRef.current = createReverb();
+      reverbWetGainRef.current = audioContextRef.current.createGain();
+      reverbWetGainRef.current.gain.setValueAtTime(reverbWet, audioContextRef.current.currentTime);
       
       // Create delay
       delayNodeRef.current = audioContextRef.current.createDelay(5.0);
       delayNodeRef.current.delayTime.setValueAtTime(delayTime, audioContextRef.current.currentTime);
-      const feedbackGain = audioContextRef.current.createGain();
-      feedbackGain.gain.setValueAtTime(delayFeedback, audioContextRef.current.currentTime);
+      delayFeedbackGainRef.current = audioContextRef.current.createGain();
+      delayFeedbackGainRef.current.gain.setValueAtTime(delayFeedback, audioContextRef.current.currentTime);
       
-      delayNodeRef.current.connect(feedbackGain);
-      feedbackGain.connect(delayNodeRef.current);
+      delayNodeRef.current.connect(delayFeedbackGainRef.current);
+      delayFeedbackGainRef.current.connect(delayNodeRef.current);
       
       gainNodeRef.current.connect(delayNodeRef.current);
       gainNodeRef.current.connect(reverbNodeRef.current);
+      reverbNodeRef.current.connect(reverbWetGainRef.current);
       delayNodeRef.current.connect(audioContextRef.current.destination);
-      reverbNodeRef.current.connect(audioContextRef.current.destination);
+      reverbWetGainRef.current.connect(audioContextRef.current.destination);
       gainNodeRef.current.connect(audioContextRef.current.destination);
       
       updateReverbWet();
@@ -72,13 +77,8 @@ const FMSynthesizer = () => {
   }, [delayTime]);
 
   useEffect(() => {
-    if (delayNodeRef.current) {
-      const feedbackGain = audioContextRef.current.createGain();
-      feedbackGain.gain.setValueAtTime(delayFeedback, audioContextRef.current.currentTime);
-      delayNodeRef.current.disconnect();
-      delayNodeRef.current.connect(feedbackGain);
-      feedbackGain.connect(delayNodeRef.current);
-      delayNodeRef.current.connect(audioContextRef.current.destination);
+    if (audioContextRef.current) {
+      delayFeedbackGainRef.current.gain.setValueAtTime(delayFeedback, audioContextRef.current.currentTime);
     }
   }, [delayFeedback]);
 
@@ -101,8 +101,8 @@ const FMSynthesizer = () => {
   };
 
   const updateReverbWet = () => {
-    if (reverbNodeRef.current) {
-      reverbNodeRef.current.wet.value = reverbWet;
+    if (reverbWetGainRef.current) {
+      reverbWetGainRef.current.gain.setValueAtTime(reverbWet, audioContextRef.current.currentTime);
     }
   };
 
