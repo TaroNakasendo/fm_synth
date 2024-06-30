@@ -15,15 +15,22 @@ const FMSynthesizer = () => {
 
   const [modulationIndex, setModulationIndex] = useState(800);
   const [modulationRatio, setModulationRatio] = useState(4);
-  const [waveform, setWaveform] = useState('square');
-  const [attack, setAttack] = useState(0.0);
+  const [waveform, setWaveform] = useState('sawtooth');
+  const [attack, setAttack] = useState(0.01);
   const [decay, setDecay] = useState(0.47);
-  const [sustain, setSustain] = useState(0.5);
+  const [sustain, setSustain] = useState(0.65);
   const [release, setRelease] = useState(0.2);
-  const [reverbWet, setReverbWet] = useState(0.8);
+  const [reverbWet, setReverbWet] = useState(1.0);
   const [delayTime, setDelayTime] = useState(0.48);
   const [delayFeedback, setDelayFeedback] = useState(0.4);
   const [octaveShift, setOctaveShift] = useState(0);
+
+  const frequencyMap = {
+    'z': 261.63, 's': 277.18, 'x': 293.66, 'd': 311.13, 'c': 329.63,
+    'v': 349.23, 'g': 369.99, 'b': 392.00, 'h': 415.30, 'n': 440.00,
+    'j': 466.16, 'm': 493.88, ',': 523.25, 'l': 554.37, '.': 587.33,
+    ';': 622.25, '/': 659.25, ':': 698.46, '\\': 739.99
+  };
 
   const initializeAudioContext = () => {
     if (!audioContextRef.current) {
@@ -174,12 +181,6 @@ const FMSynthesizer = () => {
   const handleKeyDown = (event) => {
     if (event.repeat) return;
     const key = event.key.toLowerCase();
-    const frequencyMap = {
-      'z': 261.63, 's': 277.18, 'x': 293.66, 'd': 311.13, 'c': 329.63,
-      'v': 349.23, 'g': 369.99, 'b': 392.00, 'h': 415.30, 'n': 440.00,
-      'j': 466.16, 'm': 493.88, ',': 523.25, 'l': 554.37, '.': 587.33,
-      ';': 622.25, '/': 659.25, ':': 698.46, '\\': 739.99
-    };
     if (frequencyMap[key]) {
       playNote(frequencyMap[key] * Math.pow(2, octaveShift));
     }
@@ -187,12 +188,6 @@ const FMSynthesizer = () => {
 
   const handleKeyUp = (event) => {
     const key = event.key.toLowerCase();
-    const frequencyMap = {
-      'z': 261.63, 's': 277.18, 'x': 293.66, 'd': 311.13, 'c': 329.63,
-      'v': 349.23, 'g': 369.99, 'b': 392.00, 'h': 415.30, 'n': 440.00,
-      'j': 466.16, 'm': 493.88, ',': 523.25, 'l': 554.37, '.': 587.33,
-      ';': 622.25, '/': 659.25, ':': 698.46, '\\': 739.99
-    };
     if (frequencyMap[key]) {
       stopNote(frequencyMap[key] * Math.pow(2, octaveShift));
     }
@@ -217,17 +212,17 @@ const FMSynthesizer = () => {
 
   return (
     <div className="p-4 bg-gray-100 rounded-lg">
-      <h2 className="text-2xl font-bold mb-4">Advanced FM Synthesizer with Delay</h2>
+      <h2 className="text-2xl font-bold mb-4">16 Key FM Synthesizer with Delay</h2>
       <div className="keyboard mb-4">
-        {['Z', 'S', 'X', 'D', 'C', 'V', 'G', 'B', 'H', 'N', 'J', 'M', ',', 'L', '.', ';', '/', ':', '\\'].map((key, index) => (
+        {Object.keys(frequencyMap).map((key, index) => (
           <div
             key={key}
-            className={`key ${['Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', ':', '\\'].includes(key) ? 'white-key' : 'black-key'} ${isPlaying[[261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.00, 415.30, 440.00, 466.16, 493.88, 523.25, 554.37, 587.33, 622.25, 659.25, 698.46, 739.99][index]] ? 'playing' : ''}`}
-            onMouseDown={() => playNote([261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.00, 415.30, 440.00, 466.16, 493.88, 523.25, 554.37, 587.33, 622.25, 659.25, 698.46, 739.99][index] * Math.pow(2, octaveShift))}
-            onMouseUp={() => stopNote([261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.00, 415.30, 440.00, 466.16, 493.88, 523.25, 554.37, 587.33, 622.25, 659.25, 698.46, 739.99][index] * Math.pow(2, octaveShift))}
-            onMouseLeave={() => stopNote([261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.00, 415.30, 440.00, 466.16, 493.88, 523.25, 554.37, 587.33, 622.25, 659.25, 698.46, 739.99][index] * Math.pow(2, octaveShift))}
+            className={`key ${['z', 'x', 'c', 'v', 'b', 'n', 'm', ',', ':', '\\'].includes(key) ? 'white-key' : 'black-key'} ${isPlaying[frequencyMap[key] * Math.pow(2, octaveShift)] ? 'playing' : ''}`}
+            onMouseDown={() => playNote(frequencyMap[key] * Math.pow(2, octaveShift))}
+            onMouseUp={() => stopNote(frequencyMap[key] * Math.pow(2, octaveShift))}
+            onMouseLeave={() => stopNote(frequencyMap[key] * Math.pow(2, octaveShift))}
           >
-            {key}
+            {key.toUpperCase()}
           </div>
         ))}
       </div>
