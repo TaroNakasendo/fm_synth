@@ -12,7 +12,7 @@ const FMSynthesizer = () => {
   const delayFeedbackGainRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState({});
   const [isAudioContextStarted, setIsAudioContextStarted] = useState(false);
-  
+
   const [modulationIndex, setModulationIndex] = useState(800);
   const [modulationRatio, setModulationRatio] = useState(4);
   const [waveform, setWaveform] = useState('square');
@@ -23,34 +23,35 @@ const FMSynthesizer = () => {
   const [reverbWet, setReverbWet] = useState(0.8);
   const [delayTime, setDelayTime] = useState(0.48);
   const [delayFeedback, setDelayFeedback] = useState(0.4);
+  const [octaveShift, setOctaveShift] = useState(0);
 
   const initializeAudioContext = () => {
     if (!audioContextRef.current) {
       audioContextRef.current = new (window.AudioContext || window.AudioContext)();
       gainNodeRef.current = audioContextRef.current.createGain();
       gainNodeRef.current.gain.setValueAtTime(0.5, audioContextRef.current.currentTime);
-      
+
       // Create reverb
       reverbNodeRef.current = createReverb();
       reverbWetGainRef.current = audioContextRef.current.createGain();
       reverbWetGainRef.current.gain.setValueAtTime(reverbWet, audioContextRef.current.currentTime);
-      
+
       // Create delay
       delayNodeRef.current = audioContextRef.current.createDelay(5.0);
       delayNodeRef.current.delayTime.setValueAtTime(delayTime, audioContextRef.current.currentTime);
       delayFeedbackGainRef.current = audioContextRef.current.createGain();
       delayFeedbackGainRef.current.gain.setValueAtTime(delayFeedback, audioContextRef.current.currentTime);
-      
+
       delayNodeRef.current.connect(delayFeedbackGainRef.current);
       delayFeedbackGainRef.current.connect(delayNodeRef.current);
-      
+
       gainNodeRef.current.connect(delayNodeRef.current);
       gainNodeRef.current.connect(reverbNodeRef.current);
       reverbNodeRef.current.connect(reverbWetGainRef.current);
       delayNodeRef.current.connect(audioContextRef.current.destination);
       reverbWetGainRef.current.connect(audioContextRef.current.destination);
       gainNodeRef.current.connect(audioContextRef.current.destination);
-      
+
       updateReverbWet();
       setIsAudioContextStarted(true);
     }
@@ -88,14 +89,14 @@ const FMSynthesizer = () => {
     const sampleRate = audioContextRef.current.sampleRate;
     const impulseLength = sampleRate * reverbTime;
     const impulseBuffer = audioContextRef.current.createBuffer(2, impulseLength, sampleRate);
-    
+
     for (let channel = 0; channel < 2; channel++) {
       const impulseData = impulseBuffer.getChannelData(channel);
       for (let i = 0; i < impulseLength; i++) {
         impulseData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / impulseLength, reverbTime);
       }
     }
-    
+
     convolver.buffer = impulseBuffer;
     return convolver;
   };
@@ -135,7 +136,7 @@ const FMSynthesizer = () => {
     modulationGain.connect(oscillator.frequency);
     oscillator.connect(envelope);
     envelope.connect(gainNodeRef.current);
-    
+
     modulator.start(time);
     oscillator.start(time);
 
@@ -174,23 +175,35 @@ const FMSynthesizer = () => {
     if (event.repeat) return;
     const key = event.key.toLowerCase();
     const frequencyMap = {
-      'z': 261.63, 'x': 293.66, 'c': 329.63, 'v': 349.23,
-      'b': 392.00, 'n': 440.00, 'm': 493.88, ',': 523.25
+      'z': 261.63, 's': 277.18, 'x': 293.66, 'd': 311.13, 'c': 329.63,
+      'v': 349.23, 'g': 369.99, 'b': 392.00, 'h': 415.30, 'n': 440.00,
+      'j': 466.16, 'm': 493.88, ',': 523.25, 'l': 554.37, '.': 587.33,
+      ';': 622.25, '/': 659.25, ':': 698.46, '\\': 739.99
     };
     if (frequencyMap[key]) {
-      playNote(frequencyMap[key]);
+      playNote(frequencyMap[key] * Math.pow(2, octaveShift));
     }
   };
 
   const handleKeyUp = (event) => {
     const key = event.key.toLowerCase();
     const frequencyMap = {
-      'z': 261.63, 'x': 293.66, 'c': 329.63, 'v': 349.23,
-      'b': 392.00, 'n': 440.00, 'm': 493.88, ',': 523.25
+      'z': 261.63, 's': 277.18, 'x': 293.66, 'd': 311.13, 'c': 329.63,
+      'v': 349.23, 'g': 369.99, 'b': 392.00, 'h': 415.30, 'n': 440.00,
+      'j': 466.16, 'm': 493.88, ',': 523.25, 'l': 554.37, '.': 587.33,
+      ';': 622.25, '/': 659.25, ':': 698.46, '\\': 739.99
     };
     if (frequencyMap[key]) {
-      stopNote(frequencyMap[key]);
+      stopNote(frequencyMap[key] * Math.pow(2, octaveShift));
     }
+  };
+
+  const increaseOctave = () => {
+    setOctaveShift((prev) => Math.min(prev + 1, 3));
+  };
+
+  const decreaseOctave = () => {
+    setOctaveShift((prev) => Math.max(prev - 1, -3));
   };
 
   useEffect(() => {
@@ -200,29 +213,29 @@ const FMSynthesizer = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [attack, decay, sustain, release, waveform, modulationIndex, modulationRatio]);
+  }, [attack, decay, sustain, release, waveform, modulationIndex, modulationRatio, octaveShift]);
 
   return (
     <div className="p-4 bg-gray-100 rounded-lg">
       <h2 className="text-2xl font-bold mb-4">Advanced FM Synthesizer with Delay</h2>
-      <div className="grid grid-cols-4 gap-2 mb-4">
-        {['Z', 'X', 'C', 'V', 'B', 'N', 'M', ','].map((key, index) => (
-          <button
+      <div className="keyboard mb-4">
+        {['Z', 'S', 'X', 'D', 'C', 'V', 'G', 'B', 'H', 'N', 'J', 'M', ',', 'L', '.', ';', '/', ':', '\\'].map((key, index) => (
+          <div
             key={key}
-            className={`p-4 text-lg font-bold rounded ${
-              isPlaying[[261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25][index]]
-                ? 'bg-blue-500 text-white'
-                : 'bg-white text-black'
-            }`}
-            onMouseDown={() => playNote([261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25][index])}
-            onMouseUp={() => stopNote([261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25][index])}
-            onMouseLeave={() => stopNote([261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25][index])}
+            className={`key ${['Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', ':', '\\'].includes(key) ? 'white-key' : 'black-key'} ${isPlaying[[261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.00, 415.30, 440.00, 466.16, 493.88, 523.25, 554.37, 587.33, 622.25, 659.25, 698.46, 739.99][index]] ? 'playing' : ''}`}
+            onMouseDown={() => playNote([261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.00, 415.30, 440.00, 466.16, 493.88, 523.25, 554.37, 587.33, 622.25, 659.25, 698.46, 739.99][index] * Math.pow(2, octaveShift))}
+            onMouseUp={() => stopNote([261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.00, 415.30, 440.00, 466.16, 493.88, 523.25, 554.37, 587.33, 622.25, 659.25, 698.46, 739.99][index] * Math.pow(2, octaveShift))}
+            onMouseLeave={() => stopNote([261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.00, 415.30, 440.00, 466.16, 493.88, 523.25, 554.37, 587.33, 622.25, 659.25, 698.46, 739.99][index] * Math.pow(2, octaveShift))}
           >
             {key}
-          </button>
+          </div>
         ))}
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="mb-4">
+        <button onClick={decreaseOctave} className="p-2 bg-blue-500 text-white rounded mr-2">- Octave</button>
+        <button onClick={increaseOctave} className="p-2 bg-blue-500 text-white rounded">+ Octave</button>
+      </div>
+      <div className="grid grid-cols-2 gap-4 mb-4">
         <div>
           <label className="block mb-2">Modulation Index: {modulationIndex}</label>
           <input
@@ -240,7 +253,7 @@ const FMSynthesizer = () => {
             type="range"
             min="0.5"
             max="8"
-            step="0.5"
+            step="0.1"
             value={modulationRatio}
             onChange={(e) => setModulationRatio(Number(e.target.value))}
             className="w-full"
@@ -348,6 +361,41 @@ const FMSynthesizer = () => {
         </div>
       </div>
       <p className="mt-4 text-sm">Press the keys or click the buttons to play notes</p>
+      <style jsx>{`
+        .keyboard {
+          display: flex;
+          flex-wrap: wrap;
+        }
+        .key {
+          width: 40px;
+          height: 150px;
+          margin: 2px;
+          display: flex;
+          justify-content: center;
+          align-items: flex-end;
+          cursor: pointer;
+          user-select: none;
+          font-size: 14px;
+          font-weight: bold;
+        }
+        .white-key {
+          background: white;
+          border: 1px solid #000;
+        }
+        .black-key {
+          background: black;
+          border: 1px solid #000;
+          color: white;
+          width: 30px;
+          height: 100px;
+          margin-left: -15px;
+          margin-right: -15px;
+          z-index: 1;
+        }
+        .playing {
+          background: yellow;
+        }
+      `}</style>
     </div>
   );
 };
