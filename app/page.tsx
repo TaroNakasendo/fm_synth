@@ -1,28 +1,28 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 
-const frequencyMap = {
+const frequencyMap: Record<string, number> = {
   'z': 261.63, 's': 277.18, 'x': 293.66, 'd': 311.13, 'c': 329.63,
   'v': 349.23, 'g': 369.99, 'b': 392.00, 'h': 415.30, 'n': 440.00,
   'j': 466.16, 'm': 493.88, ',': 523.25, 'l': 554.37, '.': 587.33,
-  ';': 622.25, '/': 659.25, ':': 698.46, '\\': 739.99
+  ';': 622.25, '/': 659.25, '\\': 698.46, ']': 739.99
 };
 
-const FMSynthesizer = () => {
-  const audioContextRef = useRef(null);
-  const voicesRef = useRef({});
-  const gainNodeRef = useRef(null);
-  const reverbNodeRef = useRef(null);
-  const reverbWetGainRef = useRef(null);
-  const delayNodeRef = useRef(null);
-  const delayFeedbackGainRef = useRef(null);
-  const [isPlaying, setIsPlaying] = useState({});
+const FMSynthesizer: React.FC = () => {
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const voicesRef = useRef<Record<number, any>>({});
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const reverbNodeRef = useRef<ConvolverNode | null>(null);
+  const reverbWetGainRef = useRef<GainNode | null>(null);
+  const delayNodeRef = useRef<DelayNode | null>(null);
+  const delayFeedbackGainRef = useRef<GainNode | null>(null);
+  const [isPlaying, setIsPlaying] = useState<Record<number, boolean>>({});
   const [isAudioContextStarted, setIsAudioContextStarted] = useState(false);
 
   const [modulationIndex, setModulationIndex] = useState(800);
   const [modulationRatio, setModulationRatio] = useState(4);
-  const [waveform, setWaveform] = useState('sawtooth');
+  const [waveform, setWaveform] = useState<OscillatorType>('sawtooth');
   const [attack, setAttack] = useState(0.01);
   const [decay, setDecay] = useState(0.47);
   const [sustain, setSustain] = useState(0.65);
@@ -32,9 +32,15 @@ const FMSynthesizer = () => {
   const [delayFeedback, setDelayFeedback] = useState(0.4);
   const [octaveShift, setOctaveShift] = useState(0);
 
-  const initializeAudioContext = () => {
+  const updateReverbWet = useCallback(() => {
+    if (reverbWetGainRef.current && audioContextRef.current) {
+      reverbWetGainRef.current.gain.setValueAtTime(reverbWet, audioContextRef.current.currentTime);
+    }
+  }, [reverbWet]);
+
+  const initializeAudioContext = useCallback(() => {
     if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || window.AudioContext)();
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       gainNodeRef.current = audioContextRef.current.createGain();
       gainNodeRef.current.gain.setValueAtTime(0.5, audioContextRef.current.currentTime);
 
@@ -53,8 +59,10 @@ const FMSynthesizer = () => {
       delayFeedbackGainRef.current.connect(delayNodeRef.current);
 
       gainNodeRef.current.connect(delayNodeRef.current);
-      gainNodeRef.current.connect(reverbNodeRef.current);
-      reverbNodeRef.current.connect(reverbWetGainRef.current);
+      if (reverbNodeRef.current) {
+        gainNodeRef.current.connect(reverbNodeRef.current);
+        reverbNodeRef.current.connect(reverbWetGainRef.current);
+      }
       delayNodeRef.current.connect(audioContextRef.current.destination);
       reverbWetGainRef.current.connect(audioContextRef.current.destination);
       gainNodeRef.current.connect(audioContextRef.current.destination);
@@ -62,9 +70,10 @@ const FMSynthesizer = () => {
       updateReverbWet();
       setIsAudioContextStarted(true);
     }
-  };
+  }, [delayFeedback, delayTime, reverbWet, updateReverbWet]);
 
   const createReverb = () => {
+    if (!audioContextRef.current) return null;
     const convolver = audioContextRef.current.createConvolver();
     const reverbTime = 2;
     const sampleRate = audioContextRef.current.sampleRate;
@@ -82,19 +91,13 @@ const FMSynthesizer = () => {
     return convolver;
   };
 
-  const updateReverbWet = () => {
-    if (reverbWetGainRef.current) {
-      reverbWetGainRef.current.gain.setValueAtTime(reverbWet, audioContextRef.current.currentTime);
-    }
-  };
-
-  const playNote = (frequency) => {
+  const playNote = useCallback((frequency: number) => {
     if (!isAudioContextStarted) {
       initializeAudioContext();
     }
 
-    if (voicesRef.current[frequency]) {
-      return; // Note is already playing
+    if (!audioContextRef.current || voicesRef.current[frequency]) {
+      return; // Note is already playing or audio context is not initialized
     }
 
     const time = audioContextRef.current.currentTime;
@@ -116,7 +119,10 @@ const FMSynthesizer = () => {
     modulator.connect(modulationGain);
     modulationGain.connect(oscillator.frequency);
     oscillator.connect(envelope);
-    envelope.connect(gainNodeRef.current);
+
+    if (gainNodeRef.current) {
+      envelope.connect(gainNodeRef.current);
+    }
 
     modulator.start(time);
     oscillator.start(time);
@@ -128,11 +134,15 @@ const FMSynthesizer = () => {
 
     voicesRef.current[frequency] = { oscillator, modulator, envelope };
     setIsPlaying((prev) => ({ ...prev, [frequency]: true }));
-  };
+  }, [attack, decay, initializeAudioContext, isAudioContextStarted, modulationIndex, modulationRatio, sustain, waveform]);
 
-  const stopNote = (frequency) => {
+  const stopNote = useCallback((frequency: number) => {
     if (!voicesRef.current[frequency]) {
       return; // Note is not playing
+    }
+
+    if (!audioContextRef.current) {
+      return; // Audio context is not initialized
     }
 
     const time = audioContextRef.current.currentTime;
@@ -150,22 +160,22 @@ const FMSynthesizer = () => {
     }, release * 1000);
 
     setIsPlaying((prev) => ({ ...prev, [frequency]: false }));
-  };
+  }, [release]);
 
-  const handleKeyDown = (event) => {
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if (event.repeat) return;
     const key = event.key.toLowerCase();
-    if (frequencyMap[key]) {
-      playNote(frequencyMap[key] * Math.pow(2, octaveShift));
+    if (frequencyMap[key as keyof typeof frequencyMap]) {
+      playNote(frequencyMap[key as keyof typeof frequencyMap] * Math.pow(2, octaveShift));
     }
-  };
+  }, [octaveShift, playNote]);
 
-  const handleKeyUp = (event) => {
+  const handleKeyUp = useCallback((event: KeyboardEvent) => {
     const key = event.key.toLowerCase();
-    if (frequencyMap[key]) {
-      stopNote(frequencyMap[key] * Math.pow(2, octaveShift));
+    if (frequencyMap[key as keyof typeof frequencyMap]) {
+      stopNote(frequencyMap[key as keyof typeof frequencyMap] * Math.pow(2, octaveShift));
     }
-  };
+  }, [octaveShift, stopNote]);
 
   const increaseOctave = () => {
     setOctaveShift((prev) => Math.min(prev + 1, 3));
@@ -182,11 +192,11 @@ const FMSynthesizer = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [attack, decay, sustain, release, waveform, modulationIndex, modulationRatio, octaveShift]);
+  }, [handleKeyDown, handleKeyUp]);
 
   return (
     <div className="p-4 bg-gray-100 rounded-lg">
-      <h2 className="text-2xl font-bold mb-4">16 Key FM Synthesizer with Delay</h2>
+      <h2 className="text-2xl font-bold mb-4">19 Key FM Synthesizer with Delay</h2>
       <Keyboard
         frequencyMap={frequencyMap}
         isPlaying={isPlaying}
@@ -233,7 +243,7 @@ const Keyboard = ({ frequencyMap, isPlaying, octaveShift, playNote, stopNote }) 
     {Object.keys(frequencyMap).map((key) => (
       <div
         key={key}
-        className={`key ${['z', 'x', 'c', 'v', 'b', 'n', 'm', ',', ':', '\\'].includes(key) ? 'white-key' : 'black-key'} ${isPlaying[frequencyMap[key] * Math.pow(2, octaveShift)] ? 'playing' : ''}`}
+        className={`key ${['z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', '\\'].includes(key) ? 'white-key' : 'black-key'} ${isPlaying[frequencyMap[key] * Math.pow(2, octaveShift)] ? 'playing' : ''}`}
         onMouseDown={() => playNote(frequencyMap[key] * Math.pow(2, octaveShift))}
         onMouseUp={() => stopNote(frequencyMap[key] * Math.pow(2, octaveShift))}
         onMouseLeave={() => stopNote(frequencyMap[key] * Math.pow(2, octaveShift))}
@@ -402,7 +412,7 @@ const Select = ({ label, value, options, onChange }) => (
     <label className="block mb-2">{label}:</label>
     <select
       value={value}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={(e) => onChange(e.target.value as OscillatorType)}
       className="w-full p-2 rounded"
     >
       {options.map(option => (
