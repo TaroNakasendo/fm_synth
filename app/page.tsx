@@ -238,7 +238,15 @@ const FMSynthesizer: React.FC = () => {
   );
 };
 
-const Keyboard = ({ frequencyMap, isPlaying, octaveShift, playNote, stopNote }) => (
+type KeyboardProps = {
+  frequencyMap: Record<string, number>;
+  isPlaying: Record<number, boolean>;
+  octaveShift: number;
+  playNote: (frequency: number) => void;
+  stopNote: (frequency: number) => void;
+};
+
+const Keyboard: React.FC<KeyboardProps> = ({ frequencyMap, isPlaying, octaveShift, playNote, stopNote }) => (
   <div className="keyboard mb-4">
     {Object.keys(frequencyMap).map((key) => (
       <div
@@ -289,7 +297,32 @@ const Keyboard = ({ frequencyMap, isPlaying, octaveShift, playNote, stopNote }) 
   </div>
 );
 
-const Controls = ({
+type ControlsProps = {
+  modulationIndex: number;
+  setModulationIndex: (value: number) => void;
+  modulationRatio: number;
+  setModulationRatio: (value: number) => void;
+  waveform: OscillatorType;
+  setWaveform: (value: OscillatorType) => void;
+  reverbWet: number;
+  setReverbWet: (value: number) => void;
+  delayTime: number;
+  setDelayTime: (value: number) => void;
+  delayFeedback: number;
+  setDelayFeedback: (value: number) => void;
+  attack: number;
+  setAttack: (value: number) => void;
+  decay: number;
+  setDecay: (value: number) => void;
+  sustain: number;
+  setSustain: (value: number) => void;
+  release: number;
+  setRelease: (value: number) => void;
+  increaseOctave: () => void;
+  decreaseOctave: () => void;
+};
+
+const Controls: React.FC<ControlsProps> = ({
   modulationIndex, setModulationIndex,
   modulationRatio, setModulationRatio,
   waveform, setWaveform,
@@ -392,7 +425,16 @@ const Controls = ({
   </>
 );
 
-const Slider = ({ label, value, min, max, step = "1", onChange }) => (
+type SliderProps = {
+  label: string;
+  value: number;
+  min: string;
+  max: string;
+  step?: string;
+  onChange: (value: number) => void;
+};
+
+const Slider: React.FC<SliderProps> = ({ label, value, min, max, step = "1", onChange }) => (
   <div>
     <label className="block mb-2">{label}: {value}</label>
     <input
@@ -407,7 +449,14 @@ const Slider = ({ label, value, min, max, step = "1", onChange }) => (
   </div>
 );
 
-const Select = ({ label, value, options, onChange }) => (
+type SelectProps = {
+  label: string;
+  value: OscillatorType;
+  options: string[];
+  onChange: (value: OscillatorType) => void;
+};
+
+const Select: React.FC<SelectProps> = ({ label, value, options, onChange }) => (
   <div>
     <label className="block mb-2">{label}:</label>
     <select
