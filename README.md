@@ -40,3 +40,7 @@ npm run build
 - put other out/ as /fm_synth/.
 
 Open [http://localhost/fm_synth/](http://localhost/fm_synth/) with your browser to see the deploy result.
+
+## License
+
+MIT License
