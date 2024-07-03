@@ -177,6 +177,20 @@ const FMSynthesizer: React.FC = () => {
     }
   }, [octaveShift, stopNote]);
 
+  const handleTouchStart = useCallback((event: TouchEvent) => {
+    const key = (event.target as HTMLElement).dataset.key;
+    if (key && frequencyMap[key as keyof typeof frequencyMap]) {
+      playNote(frequencyMap[key as keyof typeof frequencyMap] * Math.pow(2, octaveShift));
+    }
+  }, [octaveShift, playNote]);
+
+  const handleTouchEnd = useCallback((event: TouchEvent) => {
+    const key = (event.target as HTMLElement).dataset.key;
+    if (key && frequencyMap[key as keyof typeof frequencyMap]) {
+      stopNote(frequencyMap[key as keyof typeof frequencyMap] * Math.pow(2, octaveShift));
+    }
+  }, [octaveShift, stopNote]);
+
   const increaseOctave = () => {
     setOctaveShift((prev) => Math.min(prev + 1, 3));
   };
@@ -188,11 +202,15 @@ const FMSynthesizer: React.FC = () => {
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('touchstart', handleTouchStart);
+    window.addEventListener('touchend', handleTouchEnd);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [handleKeyDown, handleKeyUp]);
+  }, [handleKeyDown, handleKeyUp, handleTouchStart, handleTouchEnd]);
 
   return (
     <div className="p-4 bg-gray-100 rounded-lg">
@@ -251,10 +269,13 @@ const Keyboard: React.FC<KeyboardProps> = ({ frequencyMap, isPlaying, octaveShif
     {Object.keys(frequencyMap).map((key) => (
       <div
         key={key}
+        data-key={key}
         className={`key ${['z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', '\\'].includes(key) ? 'white-key' : 'black-key'} ${isPlaying[frequencyMap[key] * Math.pow(2, octaveShift)] ? 'playing' : ''}`}
         onMouseDown={() => playNote(frequencyMap[key] * Math.pow(2, octaveShift))}
         onMouseUp={() => stopNote(frequencyMap[key] * Math.pow(2, octaveShift))}
         onMouseLeave={() => stopNote(frequencyMap[key] * Math.pow(2, octaveShift))}
+        onTouchStart={() => playNote(frequencyMap[key] * Math.pow(2, octaveShift))}
+        onTouchEnd={() => stopNote(frequencyMap[key] * Math.pow(2, octaveShift))}
       >
         {key.toUpperCase()}
       </div>
