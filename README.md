@@ -1,5 +1,9 @@
 # FM Synthesizer
 
+## Demo
+
+<https://nakasendo.com/fm_synth/>
+
 ## Getting Started
 
 This systh was coded by chatGPT and claude 3.5 sonnet.
